@@ -1,0 +1,26 @@
+import sys
+
+if len(sys.argv) < 3:
+  print('expected: <query> <target>')
+  sys.exit(1)
+
+type K = Kmer[11]
+
+query = list[K]()
+target = list[seq]()
+
+def query_append(kmer: K):
+  query.append(kmer)
+
+def target_append(s: seq):
+  target.append(s)
+
+if sys.argv[1].endswith('.fa'):
+  FASTA(sys.argv[1], fai=False) |> seqs |> kmers[K](1) |> query_append
+else:
+  for kmer in seq(sys.argv[1]) |> kmers[K](1):
+    query_append(kmer)
+
+FASTA(sys.argv[2], fai=False) |> seqs |> target_append
+
+print(query)
