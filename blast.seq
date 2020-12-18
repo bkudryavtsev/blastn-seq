@@ -6,21 +6,45 @@ if len(sys.argv) < 3:
 
 type K = Kmer[11]
 
-query = list[K]()
+query = list[seq]()
 target = list[seq]()
 
-def query_append(kmer: K):
-  query.append(kmer)
-
-def target_append(s: seq):
-  target.append(s)
+query_words = list[K]()
+target_words = list[K]()
 
 if sys.argv[1].endswith('.fa'):
-  FASTA(sys.argv[1], fai=False) |> seqs |> kmers[K](1) |> query_append
+  for read in FASTA(sys.argv[1], fai=False) |> seqs:
+    query.append(read)
+    for kmer in read.kmers[K](1):
+      query_words.append(kmer)
 else:
+  query.append(seq(sys.argv[1]))
   for kmer in seq(sys.argv[1]) |> kmers[K](1):
-    query_append(kmer)
+    query_words.append(kmer)
 
-FASTA(sys.argv[2], fai=False) |> seqs |> target_append
+for read in FASTA(sys.argv[2], fai=False) |> seqs:
+  target.append(read)
+  for kmer in read.kmers[K](1):
+    target_words.append(kmer)
 
-print(query)
+hsp = list[list[int]]()
+
+for q, query_word in enumerate(query_words):
+  max_score = 0
+  target_idx = 0
+  for t, target_word in enumerate(target_words):
+    score = 0
+    for i in range(len(query_word)):
+      if query_word[i] == target_word[i]:
+        score += 5
+      else:
+        score -= 4
+
+    if max_score < score:
+      max_score = score
+      target_idx = t
+  
+  if max_score > 13:
+    hsp.append([q, target_idx, max_score])
+  
+print(hsp)
