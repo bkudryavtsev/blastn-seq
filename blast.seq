@@ -7,7 +7,7 @@ if len(sys.argv) < 3:
 type K = Kmer[11]
 
 MATCH = 5
-MISMATCH = -4
+MISMATCH = 4
 T = 13 # score threshold
 X = 20 # drop-off threshold
 S = 100
