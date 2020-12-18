@@ -7,10 +7,9 @@ if len(sys.argv) < 3:
 type K = Kmer[11]
 
 MATCH = 5
-MISMATCH = 4
+MISMATCH = -4
 T = 13 # score threshold
 X = 20 # drop-off threshold
-S = 100
 
 query = seq()
 target = seq()
@@ -47,7 +46,7 @@ for q, query_word in enumerate(query_words):
       if query_word[i] == target_word[i]:
         score += MATCH
       else:
-        score -= MISMATCH
+        score += MISMATCH
 
     if max_score < score:
       max_score = score
@@ -86,7 +85,7 @@ for h in hsp:
       if query[query_idx] == target[target_idx]:
         score += MATCH
       else:
-        score -= MISMATCH
+        score += MISMATCH
       
     if not right_overflow:
       seg_len += 1
@@ -94,7 +93,7 @@ for h in hsp:
       if query[h[0] + right_offset] == target[h[1] + right_offset]:
         score += MATCH
       else:
-        score -= MISMATCH
+        score += MISMATCH
 
   res = [query_idx, target_idx, score, seg_len]
   if res not in hsp_extended: 
