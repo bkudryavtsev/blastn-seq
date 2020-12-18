@@ -6,6 +6,12 @@ if len(sys.argv) < 3:
 
 type K = Kmer[11]
 
+MATCH = 5
+MISMATCH = -4
+T = 13 # score threshold
+X = 20 # drop-off threshold
+S = 100
+
 query = seq()
 target = seq()
 
@@ -30,6 +36,8 @@ for read in FASTA(sys.argv[2], fai=False) |> seqs:
 # Seed
 hsp = list[list[int]]()
 
+W = len(query_words[0])
+
 for q, query_word in enumerate(query_words):
   max_score = 0
   target_idx = 0
@@ -37,22 +45,59 @@ for q, query_word in enumerate(query_words):
     score = 0
     for i in range(len(query_word)):
       if query_word[i] == target_word[i]:
-        score += 5
+        score += MATCH
       else:
-        score -= 4
+        score -= MISMATCH
 
     if max_score < score:
       max_score = score
       target_idx = t
   
-  if max_score > 13:
-    hsp.append([q, target_idx, max_score])
+  if max_score > T:
+    hsp.append([q, target_idx, max_score, W])
   
 # Extend
-for h in hsp:
-  score = 0
-  for i in range(h[0], -1, -1):
-    pass
-  for i in range(h[0] + 11, len(query)):
-    pass
+hsp_extended = hsp[:]
 
+for h in hsp:
+  score = h[2]
+  query_idx = h[0]
+  target_idx = h[1]
+  seg_len = W
+
+  left_offset = 0
+  right_offset = 0
+
+  while h[2] - score < X:
+    left_offset += 1
+    right_offset += 1
+    
+    left_overflow = h[0] - left_offset < 0 or h[1] - left_offset < 0
+    right_overflow = h[0] + right_offset > len(query) - 1 or h[1] + right_offset > len(target) - 1
+
+    if left_overflow and right_overflow:
+      break
+
+    if not left_overflow:
+      query_idx = h[0] - left_offset 
+      target_idx = h[1] - left_offset
+      seg_len += 1
+
+      if query[query_idx] == target[target_idx]:
+        score += MATCH
+      else:
+        score -= MISMATCH
+      
+    if not right_overflow:
+      seg_len += 1
+
+      if query[h[0] + right_offset] == target[h[1] + right_offset]:
+        score += MATCH
+      else:
+        score -= MISMATCH
+
+  res = [query_idx, target_idx, score, seg_len]
+  if res not in hsp_extended: 
+    hsp_extended.append(res)
+
+print(hsp_extended)
