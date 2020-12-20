@@ -15,7 +15,7 @@ MISMATCH = -4
 T = 13 # score threshold
 X = 20 # drop-off threshold (bits)
 
-S = 0.85
+S = 0.95
 PERMUTATIONS = 100
 
 Lambda = 0.318
@@ -89,9 +89,9 @@ for h in hsp:
   seg_len = W
 
   left_offset = 0
-  right_offset = W
+  right_offset = W - 1
 
-  while score_bits(h[2]) - score_bits(score) < X:
+  while score_bits(h[2] - score) < X:
     left_offset += 1
     right_offset += 1
     
@@ -162,7 +162,7 @@ for h in hsp_cutoff:
   score = h[2]
   E = K * len(query) * len(target) * math.pow(math.e, -Lambda * score)
 
-  if E < 10e-50:
+  if E < 10:
     hsp_expected.append(h)
 
 if len(hsp_expected) > 0:
