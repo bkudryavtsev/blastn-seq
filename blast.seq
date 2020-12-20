@@ -2,6 +2,8 @@ import sys
 import math
 from random import shuffle
 
+print 'blastn-seq v0.0.1 alpha\n'
+
 if len(sys.argv) < 3:
   print('expected: <query> <target>')
   sys.exit(1)
@@ -16,8 +18,8 @@ X = 22 # drop-off threshold (bits)
 S = 0.85
 PERMUTATIONS = 100
 
-Lambda = 1.33
-K = 0.621
+Lambda = 0.318
+K = 0.13
 
 def score_bits(s):
   return int((Lambda * s - math.log(K)) / math.log(2.0))
@@ -28,20 +30,31 @@ target = seq()
 query_words = list[Word]()
 target_words = list[Word]()
 
+query_header_str = ''
+target_header_str = ''
+
 if sys.argv[1].endswith('.fa'):
-  for read in FASTA(sys.argv[1], fai=False) |> seqs:
-    query = seq(str(query) + str(read))
-    for kmer in read.kmers[Word](1):
+  for r in FASTA(sys.argv[1], fai=False):
+    query_header_str = r.header
+    query = seq(str(query) + str(r.seq))
+    for kmer in r.seq.kmers[Word](1):
       query_words.append(kmer)
 else:
   query = seq(sys.argv[1])
   for kmer in query.kmers[Word](1):
     query_words.append(kmer)
 
-for read in FASTA(sys.argv[2], fai=False) |> seqs:
-  target = seq(str(target) + str(read))
-  for kmer in read.kmers[Word](1):
+for r in FASTA(sys.argv[2], fai=False):
+  target_header_str = r.header
+  target = seq(str(target) + str(r.seq))
+  for kmer in r.seq.kmers[Word](1):
     target_words.append(kmer)
+
+if query_header_str:
+  print f'\nQuery = {query_header_str}'
+
+if target_header_str:
+  print f'\n> {target_header_str}'
 
 # Seed
 hsp = list[list[int]]()
@@ -149,54 +162,63 @@ for h in hsp_cutoff:
   score = h[2]
   E = K * len(query) * len(target) * math.pow(math.e, -Lambda * score)
 
-  if E < 10e-20:
+  if E < 10e-50:
     hsp_expected.append(h)
 
-print 'Score: ', sum([score_bits(h[2]) for h in hsp_expected])
+if len(hsp_expected) > 0:
+  bit_score = score_bits(max([h[2] for h in hsp_expected]))
+  print f'\nScore = {bit_score} bits'
 
-pretty_q = str()   #query
-pretty_g = str()   #gap/match
-pretty_t = str()   #target/database
+  pretty_q = str()   #query
+  pretty_g = str()   #gap/match
+  pretty_t = str()   #target/database
 
-p = hsp_cutoff[0]
+  p = hsp_expected[0]
 
-idx_q_init = p[0]
-idx_t_init = p[1]
-l = p[3]
+  idx_q_init = p[0]
+  idx_t_init = p[1]
+  l = p[3]
 
-count_match = 0
-count_total = 0
+  count_match = 0
+  count_total = 0
 
-# Generating the strings from the hsp stitches
+  # Generating the strings from the hsp stitches
 
-for i in range(l):
-  pretty_q += str(query[idx_q_init + i])
-  if query[idx_q_init + i] == target[idx_t_init + i]:
-    pretty_g += '|'
-    count_match += 1
-  else:
-    pretty_g += ' '
-  pretty_t += str(target[idx_t_init + i])
-  count_total += 1
-  
-c = 0
+  for i in range(l):
+    pretty_q += str(query[idx_q_init + i])
+    if query[idx_q_init + i] == target[idx_t_init + i]:
+      pretty_g += '|'
+      count_match += 1
+    else:
+      pretty_g += ' '
+    pretty_t += str(target[idx_t_init + i])
+    count_total += 1
 
-white = '         '
+  query_len = len(query)
+  percent_ident = int(count_match / query_len * 100)
+  print f'Identities = {count_match}/{query_len} ({percent_ident}%)\n'
 
-idx_t_curr = idx_t_init
+  c = 0
 
-# Pretty printing in batches of 60
+  white = '         '
 
-for i in range(int((len(pretty_q) - 1) / 60)):
-  print(f'Query {i * 60} {white[len(str(i * 60)):]} {pretty_q[60*i:(60)*(i + 1)]} {(i + 1) * 60}')
-  print(f'                 {pretty_g[60*i:(60)*(i + 1)]}')
-  print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[60*i:(60)*(i + 1)]} {idx_t_curr + 60}\n')
-  idx_t_curr += 60
-  c += 1
+  idx_t_curr = idx_t_init
 
-# Pretty printing the remainder
+  # Pretty printing in batches of 60
 
-print(f'Query {c * 60} {white[len(str(c * 60)):]} {pretty_q[60*c:(60)*(c + 1)]} {len(pretty_q[c:]) + c * 60}')
-print(f'                 {pretty_g[60*c:(60)*(c + 1)]}')
-print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[60*c:(60)*(c + 1)]} {len(pretty_q[c:]) + idx_t_curr}\n')
+  for i in range(int((len(pretty_q) - 1) / 60)):
+    print(f'Query {i * 60} {white[len(str(i * 60)):]} {pretty_q[60*i:(60)*(i + 1)]} {(i + 1) * 60}')
+    print(f'                 {pretty_g[60*i:(60)*(i + 1)]}')
+    print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[60*i:(60)*(i + 1)]} {idx_t_curr + 60}\n')
+    idx_t_curr += 60
+    c += 1
+
+  # Pretty printing the remainder
+
+  print(f'Query {c * 60} {white[len(str(c * 60)):]} {pretty_q[60*c:(60)*(c + 1)]} {len(pretty_q[c:]) + c * 60}')
+  print(f'                 {pretty_g[60*c:(60)*(c + 1)]}')
+  print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[60*c:(60)*(c + 1)]} {len(pretty_q[c:]) + idx_t_curr}\n')
+
+else:
+  print '\n***** No hits found *****\n'
 
