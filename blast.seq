@@ -10,215 +10,239 @@ if len(sys.argv) < 3:
 
 type Word = Kmer[11]
 
+BATCH = 60
+K = 0.13
+Lambda = 0.318
 MATCH = 5
 MISMATCH = -4
+PERMUTATIONS = 100
+S = 0.95
 T = 13 # score threshold
 X = 20 # drop-off threshold (bits)
 
-S = 0.85
-PERMUTATIONS = 100
+white = '         '
 
-Lambda = 0.318
-K = 0.13
+
+def open_files():
+  query = seq()
+  target = seq()
+  query_words = list[Word]()
+  target_words = list[Word]()
+  query_header_str = ''
+  target_header_str = ''
+
+  if sys.argv[1].endswith('.fa'):
+    for r in FASTA(sys.argv[1], fai=False):
+      query_header_str = r.header
+      query = seq(str(query) + str(r.seq))
+      for kmer in r.seq.kmers[Word](1):
+        query_words.append(kmer)
+  else:
+    query = seq(sys.argv[1])
+    for kmer in query.kmers[Word](1):
+      query_words.append(kmer)
+
+  for r in FASTA(sys.argv[2], fai=False):
+    target_header_str = r.header
+    target = seq(str(target) + str(r.seq))
+    for kmer in r.seq.kmers[Word](1):
+      target_words.append(kmer)
+
+  if query_header_str:
+    print f'\nQuery = {query_header_str}'
+
+  if target_header_str:
+    print f'\n> {target_header_str}'
+
+  return query, target, query_words, target_words, len(query_words[0])
+
 
 def score_bits(s):
   return int((Lambda * s - math.log(K)) / math.log(2.0))
 
-query = seq()
-target = seq()
+def seed(query_words, target_words, W):
+  hsp = list[list[int]]()
 
-query_words = list[Word]()
-target_words = list[Word]()
+  for q, query_word in enumerate(query_words):
+    max_score = 0
+    target_idx = 0
+    for t, target_word in enumerate(target_words):
+      score = 0
+      for i in range(len(query_word)):
+        if query_word[i] == target_word[i]:
+          score += MATCH
+        else:
+          score += MISMATCH
 
-query_header_str = ''
-target_header_str = ''
-
-if sys.argv[1].endswith('.fa'):
-  for r in FASTA(sys.argv[1], fai=False):
-    query_header_str = r.header
-    query = seq(str(query) + str(r.seq))
-    for kmer in r.seq.kmers[Word](1):
-      query_words.append(kmer)
-else:
-  query = seq(sys.argv[1])
-  for kmer in query.kmers[Word](1):
-    query_words.append(kmer)
-
-for r in FASTA(sys.argv[2], fai=False):
-  target_header_str = r.header
-  target = seq(str(target) + str(r.seq))
-  for kmer in r.seq.kmers[Word](1):
-    target_words.append(kmer)
-
-if query_header_str:
-  print f'\nQuery = {query_header_str}'
-
-if target_header_str:
-  print f'\n> {target_header_str}'
-
-# Seed
-hsp = list[list[int]]()
-
-W = len(query_words[0])
-
-for q, query_word in enumerate(query_words):
-  max_score = 0
-  target_idx = 0
-  for t, target_word in enumerate(target_words):
-    score = 0
-    for i in range(len(query_word)):
-      if query_word[i] == target_word[i]:
-        score += MATCH
-      else:
-        score += MISMATCH
-
-    if max_score < score:
-      max_score = score
-      target_idx = t
+      if max_score < score:
+        max_score = score
+        target_idx = t
   
-  if max_score > T:
-    hsp.append([q, target_idx, max_score, W])
-  
-# Extend
-hsp_extended = list[list[int]]()
+    if max_score > T:
+      hsp.append([q, target_idx, max_score, W])
 
-for h in hsp:
-  score = h[2]
-  query_idx = h[0]
-  target_idx = h[1]
-  seg_len = W
+  return hsp
 
-  left_offset = 0
-  right_offset = W
+def extends(hsp, query, target, W):
+  hsp_extended = list[list[int]]()
 
-  while score_bits(h[2]) - score_bits(score) < X:
-    left_offset += 1
-    right_offset += 1
+  for h in hsp:
+    score = h[2]
+    query_idx = h[0]
+    target_idx = h[1]
+    seg_len = W
+
+    left_offset = 0
+    right_offset = W - 1
+
+    while score_bits(h[2] - score) < X:
+      left_offset += 1
+      right_offset += 1
     
-    left_overflow = h[0] - left_offset < 0 or h[1] - left_offset < 0
-    right_overflow = h[0] + right_offset > len(query) - 1 or h[1] + right_offset > len(target) - 1
+      left_overflow = h[0] - left_offset < 0 or h[1] - left_offset < 0
+      right_overflow = h[0] + right_offset > len(query) - 1 or h[1] + right_offset > len(target) - 1
 
-    if left_overflow and right_overflow:
-      break
+      if left_overflow and right_overflow:
+        break
 
-    if not left_overflow:
-      query_idx = h[0] - left_offset 
-      target_idx = h[1] - left_offset
-      seg_len += 1
+      if not left_overflow:
+        query_idx = h[0] - left_offset 
+        target_idx = h[1] - left_offset
+        seg_len += 1
 
-      if query[query_idx] == target[target_idx]:
-        score += MATCH
-      else:
-        score += MISMATCH
+        if query[query_idx] == target[target_idx]:
+          score += MATCH
+        else:
+          score += MISMATCH
       
-    if not right_overflow:
-      seg_len += 1
+      if not right_overflow:
+        seg_len += 1
 
-      if query[h[0] + right_offset] == target[h[1] + right_offset]:
-        score += MATCH
-      else:
-        score += MISMATCH
+        if query[h[0] + right_offset] == target[h[1] + right_offset]:
+          score += MATCH
+        else:
+          score += MISMATCH
 
-  res = [query_idx, target_idx, score, seg_len]
-  if res not in hsp_extended: 
-    hsp_extended.append(res)
+    res = [query_idx, target_idx, score, seg_len]
+    if res not in hsp_extended: 
+      hsp_extended.append(res)
 
-hsp_cutoff = list[list[int]]()
+  return hsp_extended
 
-for h in hsp_extended:
-  query_idx = h[0]
-  target_idx = h[1]
-  score_extend = h[2]
-  seg_len = h[3]
 
-  extended_seed = query[query_idx: query_idx + seg_len]
-  extended_target = target[target_idx: target_idx + seg_len]
-  count_below_extend = 0
+def cutoff(hsp_extended, query, target):
+  hsp_cutoff = list[list[int]]()
 
-  perm = list[seq]()
+  for h in hsp_extended:
+    query_idx = h[0]
+    target_idx = h[1]
+    score_extend = h[2]
+    seg_len = h[3]
 
-  for i in extended_seed:
-    perm.append(i)
+    extended_seed = query[query_idx: query_idx + seg_len]
+    extended_target = target[target_idx: target_idx + seg_len]
+    count_below_extend = 0
 
-  for i in range(PERMUTATIONS):
-    score = 0
-    shuffle(perm)
+    perm = list[seq]()
 
-    for i in range(len(perm)):
-      if perm[i] == extended_target[i]:
-        score += MATCH
-      else:
-        score += MISMATCH
+    for i in extended_seed:
+      perm.append(i)
 
-    if score < score_extend:
-      count_below_extend += 1
+    for i in range(PERMUTATIONS):
+      score = 0
+      shuffle(perm)
 
-  if count_below_extend / 100 > S:
-    hsp_cutoff.append(h)
+      for i in range(len(perm)):
+        if perm[i] == extended_target[i]:
+          score += MATCH
+        else:
+          score += MISMATCH
 
-hsp_expected = list[list[int]]()
+      if score < score_extend:
+        count_below_extend += 1
 
-for h in hsp_cutoff:
-  score = h[2]
-  E = K * len(query) * len(target) * math.pow(math.e, -Lambda * score)
+    if count_below_extend / 100 > S:
+      hsp_cutoff.append(h)
 
-  if E < 10e-50:
-    hsp_expected.append(h)
+  return hsp_cutoff
 
-if len(hsp_expected) > 0:
-  bit_score = score_bits(max([h[2] for h in hsp_expected]))
-  print f'\nScore = {bit_score} bits'
 
-  pretty_q = str()   #query
-  pretty_g = str()   #gap/match
-  pretty_t = str()   #target/database
+def expected(hsp_cutoff, query, target):
+  hsp_expected = list[list[int]]()
 
-  p = hsp_expected[0]
+  for h in hsp_cutoff:
+    score = h[2]
+    E = K * len(query) * len(target) * math.pow(math.e, -Lambda * score)
 
-  idx_q_init = p[0]
-  idx_t_init = p[1]
-  l = p[3]
+    if E < 10:
+      hsp_expected.append(h)
 
-  count_match = 0
-  count_total = 0
+  return hsp_expected
 
-  # Generating the strings from the hsp stitches
 
-  for i in range(l):
-    pretty_q += str(query[idx_q_init + i])
-    if query[idx_q_init + i] == target[idx_t_init + i]:
-      pretty_g += '|'
-      count_match += 1
-    else:
-      pretty_g += ' '
-    pretty_t += str(target[idx_t_init + i])
-    count_total += 1
-
-  query_len = len(query)
-  percent_ident = int(count_match / query_len * 100)
-  print f'Identities = {count_match}/{query_len} ({percent_ident}%)\n'
-
+def pretty_print(pretty_q, pretty_g, pretty_t, idx_t_curr):
   c = 0
 
-  white = '         '
+  # Pretty printing with sequence lengths of size batch
 
-  idx_t_curr = idx_t_init
-
-  # Pretty printing in batches of 60
-
-  for i in range(int((len(pretty_q) - 1) / 60)):
-    print(f'Query {i * 60} {white[len(str(i * 60)):]} {pretty_q[60*i:(60)*(i + 1)]} {(i + 1) * 60}')
-    print(f'                 {pretty_g[60*i:(60)*(i + 1)]}')
-    print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[60*i:(60)*(i + 1)]} {idx_t_curr + 60}\n')
-    idx_t_curr += 60
+  for i in range(int((len(pretty_q) - 1) / BATCH)):
+    print(f'Query {BATCH * i} {white[len(str(BATCH * i)):]} {pretty_q[BATCH * i:BATCH * (i + 1)]} {BATCH * (i + 1)}')
+    print(f'                 {pretty_g[BATCH * i:BATCH * (i + 1)]}')
+    print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[BATCH * i:BATCH * (i + 1)]} {idx_t_curr + BATCH}\n')
+    idx_t_curr += BATCH
     c += 1
 
   # Pretty printing the remainder
 
-  print(f'Query {c * 60} {white[len(str(c * 60)):]} {pretty_q[60*c:(60)*(c + 1)]} {len(pretty_q[c * 60:]) + (c * 60)}')
-  print(f'                 {pretty_g[60*c:(60)*(c + 1)]}')
-  print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[60*c:(60)*(c + 1)]} {len(pretty_t[c:]) + idx_t_curr}\n')
+  print(f'Query {BATCH * c} {white[len(str(BATCH * c)):]} {pretty_q[BATCH * c:]} {len(pretty_q[BATCH * c:]) + (BATCH * c)}')
+  print(f'                 {pretty_g[BATCH * c:]}')
+  print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[BATCH * c:]} {len(pretty_t[BATCH * c:]) + idx_t_curr}\n')
 
-else:
-  print '\n***** No hits found *****\n'
+
+def stitch(hsp_expected, query, target):
+  if len(hsp_expected) > 0:
+    bit_score = score_bits(max([h[2] for h in hsp_expected]))
+    print f'\nScore = {bit_score} bits'
+
+    pretty_q = str()   #query
+    pretty_g = str()   #gap/match
+    pretty_t = str()   #target/database
+
+    p = hsp_expected[0]
+
+    idx_q_init = p[0]
+    idx_t_init = p[1]
+    l = p[3]
+
+    count_match = 0
+    count_total = 0
+
+    # Generating the strings from the hsp stitches
+
+    for i in range(l):
+      pretty_q += str(query[idx_q_init + i])
+      if query[idx_q_init + i] == target[idx_t_init + i]:
+        pretty_g += '|'
+        count_match += 1
+      else:
+        pretty_g += ' '
+      pretty_t += str(target[idx_t_init + i])
+      count_total += 1
+
+    query_len = len(query)
+    percent_ident = int(count_match / query_len * 100)
+    print f'Identities = {count_match}/{query_len} ({percent_ident}%)\n'
+
+    pretty_print(pretty_q, pretty_g, pretty_t, idx_t_init)
+
+  else:
+    print '\n***** No hits found *****\n'
+
+
+query, target, query_words, target_words, W = open_files()
+hsp_seed = seed(query_words, target_words, W)
+hsp_extended = extends(hsp_seed, query, target, W)
+hsp_cutoff = cutoff(hsp_extended, query, target)
+hsp_expected = expected(hsp_cutoff, query, target)
+stitch(hsp_expected, query, target)
 
