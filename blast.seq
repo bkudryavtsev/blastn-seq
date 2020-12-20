@@ -1,9 +1,5 @@
-import sys, python
+import sys
 from random import shuffle
-
-pydef permute(l: int) -> list[int]:
-  import numpy
-  return numpy.random.permutation(l)
 
 if len(sys.argv) < 3:
   print('expected: <query> <target>')
@@ -16,7 +12,7 @@ MISMATCH = -4
 PERMUTATIONS = 100
 T = 13 # score threshold
 X = 20 # drop-off threshold
-S = 0.85
+S = 0.85 # 
 
 query = seq()
 target = seq()
@@ -72,7 +68,7 @@ for h in hsp:
   seg_len = W
 
   left_offset = 0
-  right_offset = 0
+  right_offset = W
 
   while h[2] - score < X:
     left_offset += 1
@@ -136,11 +132,54 @@ for h in hsp_extended:
     if score < score_extend:
       count_below_extend += 1
 
-    print(score)
-
   if count_below_extend / 100 > S:
     hsp_cutoff.append(h)
 
 print(hsp_cutoff)
+
+pretty_q = str()   #query
+pretty_g = str()   #gap/match
+pretty_t = str()   #target/database
+
+p = hsp_cutoff[0]
+
+idx_q_init = p[0]
+idx_t_init = p[1]
+l = p[3]
+
+count_match = 0
+count_total = 0
+
+# Generating the strings from the hsp stitches
+
+for i in range(l):
+  pretty_q += str(query[idx_q_init + i])
+  if query[idx_q_init + i] == target[idx_t_init + i]:
+    pretty_g += '|'
+    count_match += 1
+  else:
+    pretty_g += ' '
+  pretty_t += str(target[idx_t_init + i])
+  count_total += 1
   
+c = 0
+
+white = '         '
+
+idx_t_curr = idx_t_init
+
+# Pretty printing in batches of 60
+
+for i in range(int((len(pretty_q) - 1) / 60)):
+  print(f'Query {i * 60} {white[len(str(i * 60)):]} {pretty_q[60*i:(60)*(i + 1)]} {(i + 1) * 60}')
+  print(f'                 {pretty_g[60*i:(60)*(i + 1)]}')
+  print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[60*i:(60)*(i + 1)]} {idx_t_curr + 60}\n')
+  idx_t_curr += 60
+  c += 1
+
+# Pretty printing the remainder
+
+print(f'Query {c * 60} {white[len(str(c * 60)):]} {pretty_q[60*c:(60)*(c + 1)]} {len(pretty_q[c:]) + c * 60}')
+print(f'                 {pretty_g[60*c:(60)*(c + 1)]}')
+print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[60*c:(60)*(c + 1)]} {len(pretty_q[c:]) + idx_t_curr}\n')
 
