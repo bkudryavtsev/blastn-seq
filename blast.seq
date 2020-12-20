@@ -13,7 +13,7 @@ type Word = Kmer[11]
 MATCH = 5
 MISMATCH = -4
 T = 13 # score threshold
-X = 22 # drop-off threshold (bits)
+X = 20 # drop-off threshold (bits)
 
 S = 0.85
 PERMUTATIONS = 100
@@ -215,7 +215,7 @@ if len(hsp_expected) > 0:
 
   # Pretty printing the remainder
 
-  print(f'Query {c * 60} {white[len(str(c * 60)):]} {pretty_q[60*c:(60)*(c + 1)]} {len(pretty_q[c:]) + c * 60}')
+  print(f'Query {c * 60} {white[len(str(c * 60)):]} {pretty_q[60*c:(60)*(c + 1)]} {len(pretty_q[c * 60:]) + (c * 60)}')
   print(f'                 {pretty_g[60*c:(60)*(c + 1)]}')
   print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[60*c:(60)*(c + 1)]} {len(pretty_q[c:]) + idx_t_curr}\n')
 
