@@ -1,9 +1,6 @@
-import sys, python
+import sys
+import math
 from random import shuffle
-
-pydef permute(l: int) -> list[int]:
-  import numpy
-  return numpy.random.permutation(l)
 
 if len(sys.argv) < 3:
   print('expected: <query> <target>')
@@ -13,10 +10,14 @@ type K = Kmer[11]
 
 MATCH = 5
 MISMATCH = -4
-PERMUTATIONS = 100
 T = 13 # score threshold
 X = 20 # drop-off threshold
+
 S = 0.85
+PERMUTATIONS = 100
+
+expect_Lambda = 1.33
+expect_K = 0.621
 
 query = seq()
 target = seq()
@@ -136,11 +137,17 @@ for h in hsp_extended:
     if score < score_extend:
       count_below_extend += 1
 
-    print(score)
-
   if count_below_extend / 100 > S:
     hsp_cutoff.append(h)
 
-print(hsp_cutoff)
-  
+hsp_expected = list[list[int]]()
+
+for h in hsp_cutoff:
+  score = h[2]
+  E = expect_K * len(query) * len(target) * math.pow(math.e, -expect_Lambda * score)
+
+  if E < 10e-10:
+    hsp_expected.append(h)
+
+print(hsp_expected)
 
