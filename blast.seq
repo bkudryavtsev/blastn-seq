@@ -217,7 +217,7 @@ if len(hsp_expected) > 0:
 
   print(f'Query {c * 60} {white[len(str(c * 60)):]} {pretty_q[60*c:(60)*(c + 1)]} {len(pretty_q[c * 60:]) + (c * 60)}')
   print(f'                 {pretty_g[60*c:(60)*(c + 1)]}')
-  print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[60*c:(60)*(c + 1)]} {len(pretty_q[c:]) + idx_t_curr}\n')
+  print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[60*c:(60)*(c + 1)]} {len(pretty_t[c:]) + idx_t_curr}\n')
 
 else:
   print '\n***** No hits found *****\n'
