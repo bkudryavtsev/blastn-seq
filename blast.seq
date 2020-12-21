@@ -239,9 +239,9 @@ def stitch(hsp_expected, query, target):
 
 
   for h in hsp_expected:
-    idx_q_curr = p[0]
-    idx_t_curr = p[1]
-    l_curr = p[3]
+    idx_q_curr = h[0]
+    idx_t_curr = h[1]
+    l_curr = h[3]
     
     if idx_q_curr < idx_q_prev or idx_t_curr < idx_t_prev:
       continue
