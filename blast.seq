@@ -22,8 +22,7 @@ X = 20 # drop-off threshold (bits)
 
 white = '         '
 
-
-def open_files():
+def read_input():
   query = seq()
   target = seq()
   query_words = list[Word]()
@@ -50,12 +49,13 @@ def open_files():
 
   if query_header_str:
     print f'\nQuery = {query_header_str}'
+    print 'Length =', len(query)
 
   if target_header_str:
     print f'\n> {target_header_str}'
+    print 'Length =', len(target)
 
   return query, target, query_words, target_words, len(query_words[0])
-
 
 def score_bits(s):
   return int((Lambda * s - math.log(K)) / math.log(2.0))
@@ -95,7 +95,10 @@ def extends(hsp, query, target, W):
     left_offset = 0
     right_offset = W - 1
 
-    while score_bits(h[2] - score) < X:
+    scores = [score]
+    max_seg = [query_idx, target_idx, score, seg_len]
+
+    while score_bits(max(scores) - score) < X:
       left_offset += 1
       right_offset += 1
     
@@ -123,12 +126,16 @@ def extends(hsp, query, target, W):
         else:
           score += MISMATCH
 
-    res = [query_idx, target_idx, score, seg_len]
-    if res not in hsp_extended: 
+      scores.append(score)
+      if score == max(scores):
+        max_seg = [query_idx, target_idx, score, seg_len]
+
+    res = [query_idx, target_idx, score, seg_len] if score_bits(max(scores) - score) < X else max_seg
+
+    if res not in hsp_extended:
       hsp_extended.append(res)
 
   return hsp_extended
-
 
 def cutoff(hsp_extended, query, target):
   hsp_cutoff = list[list[int]]()
@@ -166,7 +173,6 @@ def cutoff(hsp_extended, query, target):
 
   return hsp_cutoff
 
-
 def expected(hsp_cutoff, query, target):
   hsp_expected = list[list[int]]()
 
@@ -180,112 +186,120 @@ def expected(hsp_cutoff, query, target):
   return hsp_expected
 
 
-def pretty_print(pretty_q, pretty_g, pretty_t, idx_t_curr):
+def pretty_print(stitched_q, stitched_g, stitched_t, idx_q_curr, idx_t_curr):
   c = 0
 
   # Pretty printing with sequence lengths of size batch
 
-  for i in range(int((len(pretty_q) - 1) / BATCH)):
-    print(f'Query {BATCH * i} {white[len(str(BATCH * i)):]} {pretty_q[BATCH * i:BATCH * (i + 1)]} {BATCH * (i + 1)}')
-    print(f'                 {pretty_g[BATCH * i:BATCH * (i + 1)]}')
-    print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[BATCH * i:BATCH * (i + 1)]} {idx_t_curr + BATCH}\n')
+  for i in range(int((len(stitched_q) - 1) / BATCH)):
+    print(f'Query {idx_q_curr} {white[len(str(BATCH * i)):]} {stitched_q[BATCH * i:BATCH * (i + 1)]} {BATCH * (i + 1)}')
+    print(f'                 {stitched_g[BATCH * i:BATCH * (i + 1)]}')
+    print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {stitched_t[BATCH * i:BATCH * (i + 1)]} {idx_t_curr + BATCH}\n')
+    idx_q_curr += BATCH
     idx_t_curr += BATCH
     c += 1
 
   # Pretty printing the remainder
 
-  print(f'Query {BATCH * c} {white[len(str(BATCH * c)):]} {pretty_q[BATCH * c:]} {len(pretty_q[BATCH * c:]) + (BATCH * c)}')
-  print(f'                 {pretty_g[BATCH * c:]}')
-  print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {pretty_t[BATCH * c:]} {len(pretty_t[BATCH * c:]) + idx_t_curr}\n')
+  print(f'Query {idx_q_curr} {white[len(str(BATCH * c)):]} {stitched_q[BATCH * c:]} {len(stitched_q[BATCH * c:]) + (BATCH * c)}')
+  print(f'                 {stitched_g[BATCH * c:]}')
+  print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {stitched_t[BATCH * c:]} {len(stitched_t[BATCH * c:]) + idx_t_curr}\n')
 
 
 def stitch(hsp_expected, query, target):
-  if len(hsp_expected) > 0:
-    bit_score = score_bits(max([h[2] for h in hsp_expected]))
-    print f'\nScore = {bit_score} bits'
+  stitched_q = str()   #query
+  stitched_g = str()   #gap/match
+  stitched_t = str()   #target/database
 
-    pretty_q = str()   #query
-    pretty_g = str()   #gap/match
-    pretty_t = str()   #target/database
+  p = hsp_expected.pop(0)
 
-    p = hsp_expected.pop(0)
+  idx_q_init = p[0]
+  idx_t_init = p[1]
+  l_init = p[3]
 
-    idx_q_init = p[0]
-    idx_t_init = p[1]
-    l_init = p[3]
+  count_match = 0
+  count_total = 0
 
-    count_match = 0
-    count_total = 0
+  # Generating the strings from the hsp stitches
 
-    # Generating the strings from the hsp stitches
+  idx_q_prev = idx_q_init
+  idx_t_prev = idx_t_init
 
-    idx_q_prev = idx_q_init
-    idx_t_prev = idx_t_init
+  for i in range(l_init):
+    stitched_q += str(query[idx_q_prev])
+    if query[idx_q_prev] == target[idx_t_prev]:
+      stitched_g += '|'
+      count_match += 1
+    else:
+      stitched_g += ' '
+    stitched_t += str(target[idx_t_prev])
+    count_total += 1
+    idx_q_prev += 1
+    idx_t_prev += 1
 
-    for i in range(l_init):
-      pretty_q += str(query[idx_q_prev])
+
+  for h in hsp_expected:
+    idx_q_curr = p[0]
+    idx_t_curr = p[1]
+    l_curr = p[3]
+    
+    if idx_q_curr < idx_q_prev or idx_t_curr < idx_t_prev:
+      continue
+
+    dq = idx_q_curr - idx_q_prev
+    dt = idx_t_curr - idx_t_prev
+    diff = abs(dq - dt)
+    l_to_curr = min(dq, dt)
+
+    for i in range(diff):
+      stitched_g += ' '
+      count_total += 1
+      if dq < dt:
+        stitched_q += '-'
+        stitched_t += str(target[idx_t_prev])
+        idx_t_prev += 1
+      else:
+        stitched_q += str(query[idx_q_prev])
+        stitched_t += '-'
+        idx_q_prev += 1
+    
+    for i in range(l_to_curr + l_curr):
+      stitched_q += str(query[idx_q_prev])
       if query[idx_q_prev] == target[idx_t_prev]:
-        pretty_g += '|'
+        stitched_g += '|'
         count_match += 1
       else:
-        pretty_g += ' '
-      pretty_t += str(target[idx_t_prev])
+        stitched_g += ' '
+      stitched_t += str(target[idx_t_prev])
       count_total += 1
       idx_q_prev += 1
       idx_t_prev += 1
 
+  return stitched_q, stitched_g, stitched_t, count_match, count_total
 
-    for h in hsp_expected:
-      idx_q_curr = p[0]
-      idx_t_curr = p[1]
-      l_curr = p[3]
-      
-      if idx_q_curr < idx_q_prev or idx_t_curr < idx_t_prev:
-        continue
+def ungapped_score(a, b):
+  score = 0
+  for i in range(len(a)):
+    if a[i] == b[i]:
+      score += MATCH
+    else:
+      score += MISMATCH
+  return score, score_bits(score)
 
-      dq = idx_q_curr - idx_q_prev
-      dt = idx_t_curr - idx_t_prev
-      diff = abs(dq - dt)
-      l_to_curr = min(dq, dt)
-
-      for i in range(diff):
-        pretty_g += ' '
-        count_total += 1
-        if dq < dt:
-          pretty_q += '-'
-          pretty_t += str(target[idx_t_prev])
-          idx_t_prev += 1
-        else:
-          pretty_q += str(query[idx_q_prev])
-          pretty_t += '-'
-          idx_q_prev += 1
-      
-      for i in range(l_to_curr + l_curr):
-        pretty_q += str(query[idx_q_prev])
-        if query[idx_q_prev] == target[idx_t_prev]:
-          pretty_g += '|'
-          count_match += 1
-        else:
-          pretty_g += ' '
-        pretty_t += str(target[idx_t_prev])
-        count_total += 1
-        idx_q_prev += 1
-        idx_t_prev += 1
-
-    query_len = len(query)
-    percent_ident = int(count_match / query_len * 100)
-    print f'Identities = {count_match}/{query_len} ({percent_ident}%)\n'
-
-    pretty_print(pretty_q, pretty_g, pretty_t, idx_t_init)
-
-  else:
-    print '\n***** No hits found *****\n'
-
-
-query, target, query_words, target_words, W = open_files()
+query, target, query_words, target_words, W = read_input()
 hsp_seed = seed(query_words, target_words, W)
 hsp_extended = extends(hsp_seed, query, target, W)
 hsp_cutoff = cutoff(hsp_extended, query, target)
 hsp_expected = expected(hsp_cutoff, query, target)
-stitch(hsp_expected, query, target)
 
+if len(hsp_expected) > 0:
+  stitched_q, stitched_g, stitched_t, count_match, count_total = stitch(hsp_expected[:], query, target)
+  raw_score, bit_score = ungapped_score(stitched_q, stitched_t)
+  print f'\nScore = {bit_score} bits ({raw_score})'
+
+  percent_ident = int(count_match / count_total * 100)
+  print f'Identities = {count_match}/{count_total} ({percent_ident}%)\n'
+
+  pretty_print(stitched_q, stitched_g, stitched_t, hsp_expected[0][0], hsp_expected[0][1])
+else:
+  print '\n***** No hits found *****\n'
