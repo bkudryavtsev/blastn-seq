@@ -192,7 +192,7 @@ def pretty_print(stitched_q, stitched_g, stitched_t, idx_q_curr, idx_t_curr):
   # Pretty printing with sequence lengths of size batch
 
   for i in range(int((len(stitched_q) - 1) / BATCH)):
-    print(f'Query {idx_q_curr} {white[len(str(BATCH * i)):]} {stitched_q[BATCH * i:BATCH * (i + 1)]} {BATCH * (i + 1)}')
+    print(f'Query {idx_q_curr} {white[len(str(idx_q_curr)):]} {stitched_q[BATCH * i:BATCH * (i + 1)]} {idx_q_curr + BATCH}')
     print(f'                 {stitched_g[BATCH * i:BATCH * (i + 1)]}')
     print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {stitched_t[BATCH * i:BATCH * (i + 1)]} {idx_t_curr + BATCH}\n')
     idx_q_curr += BATCH
@@ -201,7 +201,7 @@ def pretty_print(stitched_q, stitched_g, stitched_t, idx_q_curr, idx_t_curr):
 
   # Pretty printing the remainder
 
-  print(f'Query {idx_q_curr} {white[len(str(BATCH * c)):]} {stitched_q[BATCH * c:]} {len(stitched_q[BATCH * c:]) + (BATCH * c)}')
+  print(f'Query {idx_q_curr} {white[len(str(idx_q_curr)):]} {stitched_q[BATCH * c:]} {len(stitched_q[BATCH * c:]) + idx_q_curr}')
   print(f'                 {stitched_g[BATCH * c:]}')
   print(f'Targt {idx_t_curr} {white[len(str(idx_t_curr)):]} {stitched_t[BATCH * c:]} {len(stitched_t[BATCH * c:]) + idx_t_curr}\n')
 
