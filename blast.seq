@@ -11,8 +11,8 @@ if len(sys.argv) < 3:
 type Word = Kmer[11]
 
 BATCH = 60
-K = 0.13
-Lambda = 0.318
+K = 0.176
+Lambda = 0.1915
 MATCH = 5
 MISMATCH = -4
 PERMUTATIONS = 100
