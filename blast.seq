@@ -297,7 +297,7 @@ NO_HITS_STR = '\n***** No hits found *****\n'
 if len(hsp_expected) > 0:
   stitched_q, stitched_g, stitched_t, count_match, count_total = stitch(hsp_expected[:], query, target)
   raw_score, bit_score = ungapped_score(stitched_q, stitched_t)
-  if bit_score > 0:
+  if bit_score > 50:
     print f'\nScore = {bit_score} bits ({raw_score})'
 
     percent_ident = int(count_match / count_total * 100)
