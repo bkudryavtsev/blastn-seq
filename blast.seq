@@ -208,26 +208,69 @@ def stitch(hsp_expected, query, target):
     pretty_g = str()   #gap/match
     pretty_t = str()   #target/database
 
-    p = hsp_expected[0]
+    p = hsp_expected.pop(0)
 
     idx_q_init = p[0]
     idx_t_init = p[1]
-    l = p[3]
+    l_init = p[3]
 
     count_match = 0
     count_total = 0
 
     # Generating the strings from the hsp stitches
 
-    for i in range(l):
-      pretty_q += str(query[idx_q_init + i])
-      if query[idx_q_init + i] == target[idx_t_init + i]:
+    idx_q_prev = idx_q_init
+    idx_t_prev = idx_t_init
+
+    for i in range(l_init):
+      pretty_q += str(query[idx_q_prev])
+      if query[idx_q_prev] == target[idx_t_prev]:
         pretty_g += '|'
         count_match += 1
       else:
         pretty_g += ' '
-      pretty_t += str(target[idx_t_init + i])
+      pretty_t += str(target[idx_t_prev])
       count_total += 1
+      idx_q_prev += 1
+      idx_t_prev += 1
+
+
+    for h in hsp_expected:
+      idx_q_curr = p[0]
+      idx_t_curr = p[1]
+      l_curr = p[3]
+      
+      if idx_q_curr < idx_q_prev or idx_t_curr < idx_t_prev:
+        continue
+
+      dq = idx_q_curr - idx_q_prev
+      dt = idx_t_curr - idx_t_prev
+      diff = abs(dq - dt)
+      l_to_curr = min(dq, dt)
+
+      for i in range(diff):
+        pretty_g += ' '
+        count_total += 1
+        if dq < dt:
+          pretty_q += '-'
+          pretty_t += str(target[idx_t_prev])
+          idx_t_prev += 1
+        else:
+          pretty_q += str(query[idx_q_prev])
+          pretty_t += '-'
+          idx_q_prev += 1
+      
+      for i in range(l_to_curr + l_curr):
+        pretty_q += str(query[idx_q_prev])
+        if query[idx_q_prev] == target[idx_t_prev]:
+          pretty_g += '|'
+          count_match += 1
+        else:
+          pretty_g += ' '
+        pretty_t += str(target[idx_t_prev])
+        count_total += 1
+        idx_q_prev += 1
+        idx_t_prev += 1
 
     query_len = len(query)
     percent_ident = int(count_match / query_len * 100)
